@@ -1,0 +1,2446 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>SmartBulk Timeline — Adaptive Muscle & Weight Gain PWA</title>
+  <meta name="theme-color" content="#070b14" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- React 18 & Babel Standalone via CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background-color: #03050a;
+      color: #f8fafc;
+      overscroll-behavior-y: none;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    input[type="date"]::-webkit-calendar-picker-indicator,
+    input[type="time"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.85);
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex justify-center bg-black selection:bg-emerald-500/30 selection:text-emerald-200">
+  <div id="root" class="w-full max-w-[480px] min-h-screen"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef, Component } = React;
+
+    // =========================================================================
+    // 1. REACT ERROR BOUNDARY (PREVENTS BLANK SCREENS)
+    // =========================================================================
+    class ErrorBoundary extends Component {
+      constructor(props) {
+        super(props);
+        this.state = { hasError: false, errorMessage: '' };
+      }
+      static getDerivedStateFromError(error) {
+        return { hasError: true, errorMessage: error?.message || 'Unexpected render error' };
+      }
+      componentDidCatch(error, info) {
+        console.error('SmartBulk ErrorBoundary:', error, info);
+      }
+      handleHardReset = () => {
+        try {
+          localStorage.removeItem('smartbulk_v3_state');
+        } catch (e) {}
+        window.location.reload();
+      };
+      render() {
+        if (this.state.hasError) {
+          return (
+            <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col items-center justify-center p-6 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-rose-500/15 border border-rose-500/40 flex items-center justify-center text-rose-400 mb-4 font-extrabold text-xl">
+                !
+              </div>
+              <h1 className="text-lg font-extrabold text-white">Something went wrong</h1>
+              <p className="text-xs text-slate-400 mt-1.5 max-w-xs leading-relaxed">
+                {this.state.errorMessage}
+              </p>
+              <button
+                onClick={this.handleHardReset}
+                className="mt-5 px-5 py-2.5 rounded-xl bg-emerald-500 text-slate-950 font-extrabold text-xs hover:bg-emerald-400 transition"
+              >
+                Reset State & Reload App
+              </button>
+            </div>
+          );
+        }
+        return this.props.children;
+      }
+    }
+
+    // =========================================================================
+    // 2. INLINE SVG ICON COMPONENTS (ZERO EXTERNAL ICON DEPENDENCIES)
+    // =========================================================================
+    const Icons = {
+      Calendar: ({ className = 'w-4 h-4' }) => (
+        <svg className={className} fill="none" stroke="currentColor" strokeWidth="2.1" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+        </svg>
+      ),
+      Plus: ({ className = 'w-4 h-4' }) => (
+        <svg className={className} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+      ),
+      Clock: ({ className = 'w-5 h-5' }) => (
+        <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" />
+        </svg>
+      ),
+      Bolt: ({ className = 'w-5 h-5' }) => (
+        <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+        </svg>
+      ),
+      Cart: ({ className = 'w-5 h-5' }) => (
+        <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+        </svg>
+      ),
+      Trend: ({ className = 'w-5 h-5' }) => (
+        <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
+        </svg>
+      ),
+      Check: ({ className = 'w-4 h-4' }) => (
+        <svg className={className} fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+        </svg>
+      ),
+      Copy: ({ className = 'w-4 h-4' }) => (
+        <svg className={className} fill="none" stroke="currentColor" strokeWidth="2.1" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+        </svg>
+      ),
+      Search: ({ className = 'w-4 h-4' }) => (
+        <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+        </svg>
+      ),
+      ChevronDown: ({ className = 'w-4 h-4' }) => (
+        <svg className={className} fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+        </svg>
+      ),
+      Close: ({ className = 'w-4 h-4' }) => (
+        <svg className={className} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      ),
+      Sun: ({ className = 'w-4 h-4' }) => (
+        <svg className={className} fill="none" stroke="currentColor" strokeWidth="2.1" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+        </svg>
+      ),
+      Moon: ({ className = 'w-4 h-4' }) => (
+        <svg className={className} fill="none" stroke="currentColor" strokeWidth="2.1" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+        </svg>
+      )
+    };
+
+    // =========================================================================
+    // 3. DATE HELPERS & PERSISTENCE ('smartbulk_v3_state')
+    // =========================================================================
+    const STORAGE_KEY = 'smartbulk_v3_state';
+    const BASELINE_CALORIES = 2800; // Anchor at 60.0 kg -> 1.00x portions
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+    function getTodayISO() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function parseLocalMidnight(isoStr) {
+      const [y, m, d] = (isoStr || getTodayISO()).split('-').map(Number);
+      return new Date(y, (m || 1) - 1, d || 1).getTime();
+    }
+
+    function addDaysISO(isoStr, days) {
+      const [y, m, d] = (isoStr || getTodayISO()).split('-').map(Number);
+      const dt = new Date(y, (m || 1) - 1, (d || 1) + days);
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    }
+
+    function getMondayOfWeekISO(anchorISO) {
+      const [y, m, d] = (anchorISO || getTodayISO()).split('-').map(Number);
+      const dt = new Date(y, (m || 1) - 1, d || 1);
+      const day = dt.getDay(); // 0=Sun..6=Sat
+      const diff = day === 0 ? -6 : 1 - day;
+      dt.setDate(dt.getDate() + diff);
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    }
+
+    function formatShortDate(isoStr) {
+      const [y, m, d] = (isoStr || getTodayISO()).split('-').map(Number);
+      const dt = new Date(y, (m || 1) - 1, d || 1);
+      return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function formatCompactDate(isoStr) {
+      const [y, m, d] = (isoStr || getTodayISO()).split('-').map(Number);
+      const dt = new Date(y, (m || 1) - 1, d || 1);
+      return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    function formatOffsetTime(baseHHMM, offsetMinutes) {
+      const [hStr, mStr] = (baseHHMM || '06:00').split(':');
+      let total = (parseInt(hStr, 10) || 6) * 60 + (parseInt(mStr, 10) || 0) + offsetMinutes;
+      total = ((total % 1440) + 1440) % 1440;
+      const hrs = Math.floor(total / 60);
+      const mins = total % 60;
+      const period = hrs >= 12 ? 'PM' : 'AM';
+      const displayH = hrs % 12 === 0 ? 12 : hrs % 12;
+      return `${displayH}:${String(mins).padStart(2, '0')} ${period}`;
+    }
+
+    function getCurrentWeekDates() {
+      const mondayISO = getMondayOfWeekISO(getTodayISO());
+      const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      return labels.map((label, idx) => {
+        const iso = addDaysISO(mondayISO, idx);
+        return {
+          dayIdx: idx,
+          label,
+          iso,
+          compactDate: formatCompactDate(iso),
+          isToday: iso === getTodayISO()
+        };
+      });
+    }
+
+    function createDefaultState() {
+      const todayISO = getTodayISO();
+      const endISO = addDaysISO(todayISO, 112); // Default 16 weeks / 112 days
+      return {
+        activeTab: 'diet',
+        theme: 'dark',
+        dietMode: 'nonveg', // 'nonveg' | 'veg'
+        selectedDietDate: todayISO,
+        timeline: {
+          startDate: todayISO,
+          endDate: endISO,
+          startWeight: 60.0,
+          targetGain: 12.0,
+          workoutTime: '06:00'
+        },
+        checkedMealsByDate: {},
+        selectedWorkoutDay: 1,
+        completedSets: {},
+        completedWorkoutDays: {},
+        checkedGroceries: {},
+        customGroceries: [],
+        collapsedCategories: {},
+        weightLogs: [
+          {
+            id: 'w_start',
+            date: todayISO,
+            weight: 60.0,
+            note: 'Day 1 Starting Baseline'
+          }
+        ]
+      };
+    }
+
+    function loadInitialState() {
+      const defaults = createDefaultState();
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return defaults;
+        const parsed = JSON.parse(raw);
+        const weekDates = getCurrentWeekDates().map(d => d.iso);
+        const validDietDate = weekDates.includes(parsed.selectedDietDate)
+          ? parsed.selectedDietDate
+          : getTodayISO();
+        return {
+          ...defaults,
+          ...parsed,
+          selectedDietDate: validDietDate,
+          timeline: { ...defaults.timeline, ...(parsed.timeline || {}) },
+          checkedMealsByDate: parsed.checkedMealsByDate || {},
+          weightLogs: Array.isArray(parsed.weightLogs) && parsed.weightLogs.length > 0
+            ? parsed.weightLogs
+            : defaults.weightLogs
+        };
+      } catch (e) {
+        return defaults;
+      }
+    }
+
+    // =========================================================================
+    // 4. ADAPTIVE ENGINE: TIMELINE, CALORIES, MEALS, WORKOUTS & GROCERIES
+    // =========================================================================
+    function computeTimelineMetrics(state) {
+      const tl = state.timeline;
+      const startMs = parseLocalMidnight(tl.startDate);
+      const endMs = Math.max(startMs + 7 * MS_PER_DAY, parseLocalMidnight(tl.endDate));
+      const todayMs = parseLocalMidnight(getTodayISO());
+
+      const totalDays = Math.max(7, Math.round((endMs - startMs) / MS_PER_DAY));
+      const rawElapsed = Math.round((todayMs - startMs) / MS_PER_DAY);
+      const daysElapsed = Math.max(0, Math.min(totalDays, rawElapsed));
+      const daysRemaining = Math.max(0, totalDays - daysElapsed);
+      const currentDayNumber = Math.min(totalDays, daysElapsed + 1);
+      const currentWeekNumber = Math.max(1, Math.ceil(currentDayNumber / 7));
+      const timelinePct = Math.round((daysElapsed / totalDays) * 100);
+
+      const startWeight = Number(tl.startWeight) || 60.0;
+      const targetGain = Number(tl.targetGain) || 12.0;
+      const targetWeight = +(startWeight + targetGain).toFixed(1);
+      const weeklyRateKg = +(targetGain / (totalDays / 7)).toFixed(2);
+
+      // Linear interpolation for Expected Weight Today
+      const expectedWeightToday = +(startWeight + (targetGain * daysElapsed) / totalDays).toFixed(1);
+
+      // Sort weight logs chronologically
+      const sortedLogs = [...state.weightLogs].sort((a, b) => a.date.localeCompare(b.date));
+      const latestLog = sortedLogs[sortedLogs.length - 1] || { weight: startWeight, date: tl.startDate };
+      const currentWeight = Number(latestLog.weight) || startWeight;
+
+      const actualGainSoFar = +(currentWeight - startWeight).toFixed(1);
+      const varianceKg = +(currentWeight - expectedWeightToday).toFixed(1);
+      const weightGainPct = Math.max(0, Math.min(100, Math.round((actualGainSoFar / Math.max(0.5, targetGain)) * 100)));
+
+      let paceStatus = 'On Pace';
+      let paceTone = 'sky';
+      if (varianceKg >= 0.25) {
+        paceStatus = 'Ahead of Pace';
+        paceTone = 'emerald';
+      } else if (varianceKg <= -0.25) {
+        paceStatus = 'Behind Pace';
+        paceTone = 'amber';
+      }
+
+      // Maintenance & Adaptive Calorie Surplus Engine:
+      // 1) Base maintenance scales with current body weight (~37.5 kcal/kg for active 6-day lifter)
+      // 2) Required daily surplus based on weekly target gain rate (~1100 kcal per kg/week)
+      // 3) Automatic weight-gain scaling (+150 kcal every +3 kg gained above startWeight)
+      // 4) Automatic catch-up boost (+150 kcal/day if behind expected weight by > 0.5 kg)
+      const maintenanceCalories = Math.round((currentWeight * 37.5) / 25) * 25;
+      const baseSurplus = Math.min(750, Math.max(400, Math.round((weeklyRateKg * 1100) / 25) * 25));
+      const milestoneStepBoost = Math.max(0, Math.floor(actualGainSoFar / 3)) * 150;
+      const behindPaceBoost = varianceKg < -0.5 ? 150 : 0;
+
+      const targetCalories = Math.round((maintenanceCalories + baseSurplus + milestoneStepBoost + behindPaceBoost) / 25) * 25;
+      const targetProtein = Math.round(currentWeight * 1.95); // ~1.95g/kg
+      const targetFats = Math.round((targetCalories * 0.27) / 9);
+      const targetCarbs = Math.max(150, Math.round((targetCalories - targetProtein * 4 - targetFats * 9) / 4));
+      const portionScale = +(targetCalories / BASELINE_CALORIES).toFixed(2);
+
+      // Phase classification for progressive workouts
+      let phaseName = 'Phase 1: Hypertrophy Foundation';
+      let phaseShort = 'Phase 1 (Wks 1–4)';
+      let phaseNumber = 1;
+      if (currentWeekNumber >= 11) {
+        phaseName = 'Phase 3: Peak Overload & Density';
+        phaseShort = 'Phase 3 (Wks 11+)';
+        phaseNumber = 3;
+      } else if (currentWeekNumber >= 5) {
+        phaseName = 'Phase 2: Progressive Volume';
+        phaseShort = 'Phase 2 (Wks 5–10)';
+        phaseNumber = 2;
+      }
+
+      return {
+        startDate: tl.startDate,
+        endDate: tl.endDate,
+        workoutTime: tl.workoutTime || '06:00',
+        totalDays,
+        daysElapsed,
+        daysRemaining,
+        currentDayNumber,
+        currentWeekNumber,
+        timelinePct,
+        startWeight,
+        targetGain,
+        targetWeight,
+        weeklyRateKg,
+        expectedWeightToday,
+        currentWeight,
+        actualGainSoFar,
+        varianceKg,
+        weightGainPct,
+        paceStatus,
+        paceTone,
+        maintenanceCalories,
+        baseSurplus,
+        milestoneStepBoost,
+        behindPaceBoost,
+        targetCalories,
+        targetProtein,
+        targetCarbs,
+        targetFats,
+        portionScale,
+        phaseName,
+        phaseShort,
+        phaseNumber,
+        sortedLogs
+      };
+    }
+
+    function scaleAmount(baseVal, scale, step = 5) {
+      const raw = baseVal * scale;
+      if (step === 1) return Math.max(1, Math.round(raw));
+      return Math.max(step, Math.round(raw / step) * step);
+    }
+
+    function scaleHalfStep(baseVal, scale) {
+      const raw = baseVal * scale;
+      return Math.max(0.5, Math.round(raw * 2) / 2);
+    }
+
+    function buildScaledMeals(m) {
+      const s = m.portionScale;
+      const wt = m.workoutTime;
+
+      const oatsG = scaleAmount(60, s, 5);
+      const milkMl = scaleAmount(250, s, 25);
+      const pbTbsp = scaleHalfStep(1.5, s);
+      const bananasBreakfast = scaleHalfStep(1.5, s);
+      const eggsBreakfast = scaleAmount(2, s, 1);
+      const paneerBreakfastG = scaleAmount(90, s, 10);
+
+      const chanaCups = scaleHalfStep(0.75, s);
+      const walnutsHalves = scaleAmount(6, s, 1);
+
+      const riceLunchCups = scaleHalfStep(1.25, s);
+      const rotisLunch = scaleHalfStep(2.5, s);
+      const meatLunchG = scaleAmount(120, s, 10);
+
+      const eggsEvening = scaleAmount(1, s, 1);
+      const curdEveningG = scaleAmount(120, s, 10);
+
+      const rotisDinner = scaleHalfStep(2.5, s);
+      const riceDinnerCups = scaleHalfStep(1.25, s);
+      const meatDinnerG = scaleAmount(120, s, 10);
+
+      const bedMilkMl = scaleAmount(200, s, 25);
+
+      const baseMeals = [
+        {
+          id: 'meal_pre',
+          time: formatOffsetTime(wt, -30),
+          title: 'Pre-Workout Fast Fuel',
+          nonVegDesc: `1 ripe banana + ${scaleAmount(5, s, 1)} soaked almonds + 300ml water`,
+          vegDesc: `1 ripe banana + ${scaleAmount(5, s, 1)} soaked almonds + 300ml water`,
+          baseCal: 140, basePro: 2, baseCarb: 28, baseFat: 3,
+          tag: 'Quick Glycogen & Energy'
+        },
+        {
+          id: 'meal_1',
+          time: formatOffsetTime(wt, 75),
+          title: 'Meal 1: Post-Workout Mass Smoothie & Eggs',
+          nonVegDesc: `Smoothie (${bananasBreakfast} bananas, ${oatsG}g rolled oats, ${pbTbsp} tbsp peanut butter, ${milkMl}ml milk, 1 tbsp flax/pumpkin seeds) + ${eggsBreakfast} whole boiled eggs`,
+          vegDesc: `Smoothie (${bananasBreakfast} bananas, ${oatsG}g rolled oats, ${pbTbsp} tbsp peanut butter, ${milkMl}ml milk, 1 tbsp flax/pumpkin seeds) + ${paneerBreakfastG}g paneer bhurji`,
+          baseCal: 780, basePro: 38, baseCarb: 98, baseFat: 26,
+          tag: 'Post-Training Protein Synthesis'
+        },
+        {
+          id: 'meal_2',
+          time: formatOffsetTime(wt, 270),
+          title: 'Mid-Morning Calorie & Crunch Snack',
+          nonVegDesc: `${chanaCups} cup roasted chana + ${walnutsHalves} walnut halves + 1 small seasonal fruit`,
+          vegDesc: `${chanaCups} cup roasted chana + ${walnutsHalves} walnut halves + 1 small seasonal fruit`,
+          baseCal: 300, basePro: 13, baseCarb: 38, baseFat: 11,
+          tag: 'Sustained Calorie Surplus'
+        },
+        {
+          id: 'meal_3',
+          time: formatOffsetTime(wt, 420),
+          title: 'Meal 2: High-Protein Indian Thali Lunch',
+          nonVegDesc: `${riceLunchCups} cups cooked rice (or ${rotisLunch} rotis) + ${meatLunchG}g chicken breast curry + 1 bowl thick dal + 1 cup palak/veg sabzi + curd + 1 tsp ghee`,
+          vegDesc: `${riceLunchCups} cups cooked rice (or ${rotisLunch} rotis) + ${meatLunchG}g paneer/tofu curry + 1 bowl thick dal + 1 cup palak/veg sabzi + curd + 1 tsp ghee`,
+          baseCal: 720, basePro: 36, baseCarb: 88, baseFat: 22,
+          tag: 'Peak Daytime Hypertrophy Fuel'
+        },
+        {
+          id: 'meal_4',
+          time: formatOffsetTime(wt, 630),
+          title: 'Evening Bridge Snack',
+          nonVegDesc: `${eggsEvening} whole boiled egg${eggsEvening > 1 ? 's' : ''} + 1 banana or apple + handful of roasted peanuts`,
+          vegDesc: `${curdEveningG}g thick curd / Greek yogurt + 1 banana or apple + handful of roasted peanuts`,
+          baseCal: 190, basePro: 8, baseCarb: 24, baseFat: 7,
+          tag: 'Prevents Afternoon Catabolism'
+        },
+        {
+          id: 'meal_5',
+          time: formatOffsetTime(wt, 840),
+          title: 'Meal 3: High-Protein Dinner',
+          nonVegDesc: `${rotisDinner} whole-wheat rotis (or ${riceDinnerCups} cups rice) + ${meatDinnerG}g chicken/fish curry + mixed vegetable stir-fry`,
+          vegDesc: `${rotisDinner} whole-wheat rotis (or ${riceDinnerCups} cups rice) + ${meatDinnerG}g soya chunks / paneer masala + mixed vegetable stir-fry`,
+          baseCal: 500, basePro: 24, baseCarb: 64, baseFat: 14,
+          tag: 'Evening Glycogen & Muscle Repair'
+        },
+        {
+          id: 'meal_6',
+          time: formatOffsetTime(wt, 960),
+          title: 'Before-Bed Slow-Release Recovery',
+          nonVegDesc: `${bedMilkMl}ml warm milk with a pinch of turmeric + 1 tbsp soaked chia & pumpkin seeds`,
+          vegDesc: `${bedMilkMl}ml warm milk with a pinch of turmeric + 1 tbsp soaked chia & pumpkin seeds`,
+          baseCal: 170, basePro: 8, baseCarb: 14, baseFat: 9,
+          tag: 'Overnight Casein & Recovery'
+        }
+      ];
+
+      return baseMeals.map(meal => ({
+        ...meal,
+        calories: Math.round((meal.baseCal * s) / 5) * 5,
+        protein: Math.round(meal.basePro * s),
+        carbs: Math.round(meal.baseCarb * s),
+        fats: Math.round(meal.baseFat * s)
+      }));
+    }
+
+    function buildScaledWorkouts(m) {
+      const p = m.phaseNumber;
+      const repBonus = p === 1 ? 0 : p === 2 ? 2 : 4;
+      const extraSet = p === 3 ? 1 : 0;
+      const backpackCue = p === 1
+        ? 'Focus on strict 3-second lowering tempo and full range of motion.'
+        : p === 2
+        ? 'Wear a 4–6 kg loaded backpack on push-ups, squats & lunges if top reps feel easy.'
+        : 'Wear an 8–12 kg loaded backpack and keep rest strict at 60–75s for maximum hypertrophy density.';
+
+      return [
+        {
+          day: 1,
+          shortTitle: 'Mon • Push A',
+          title: 'Monday – Push A (Chest, Shoulders, Triceps)',
+          subtitle: 'Horizontal & vertical pressing strength + triceps lockout',
+          focus: backpackCue,
+          exercises: [
+            { id: 'd1_e1', name: 'Standard Push-ups (3-sec negative)', sets: 3 + extraSet, reps: `${12 + repBonus} reps`, note: 'Lower chest for 3 full seconds, pause 1s at bottom, press explosively' },
+            { id: 'd1_e2', name: 'Wide Push-ups', sets: 3, reps: `${10 + repBonus} reps`, note: 'Hands 1.5× shoulder-width to overload outer pectoral fibers' },
+            { id: 'd1_e3', name: 'Pike Push-ups', sets: 3, reps: `${8 + repBonus} reps`, note: 'Hips high in an inverted V; lower crown of head toward floor for delts' },
+            { id: 'd1_e4', name: 'Diamond Push-ups', sets: 2 + extraSet, reps: `${8 + repBonus} reps`, note: 'Index fingers & thumbs close; keep elbows tucked to target triceps' },
+            { id: 'd1_e5', name: 'Incline Push-ups (Burnout)', sets: 3, reps: `${12 + repBonus} reps`, note: 'Hands elevated on bed/table edge to push chest past failure safely' },
+            { id: 'd1_e6', name: 'Hollow-Body Plank', sets: 3, reps: `${30 + (p - 1) * 10} sec`, note: 'Squeeze glutes and brace abs hard without letting hips sag' }
+          ]
+        },
+        {
+          day: 2,
+          shortTitle: 'Tue • Pull A',
+          title: 'Tuesday – Pull A (Back, Rear Delts, Biceps)',
+          subtitle: 'Upper-back thickness, scapular retraction & bicep tension',
+          focus: backpackCue,
+          exercises: [
+            { id: 'd2_e1', name: 'Inverted Table / Towel Door Rows', sets: 3 + extraSet, reps: `${10 + repBonus} reps`, note: 'Pull chest to table edge or loop thick bath towel around sturdy door handle' },
+            { id: 'd2_e2', name: 'Prone Y-T Raises', sets: 3, reps: `${10 + repBonus} each`, note: 'Lie face down; lift thumbs up in Y then T shape with 2s squeeze' },
+            { id: 'd2_e3', name: 'Reverse Snow Angels', sets: 3, reps: `${12 + repBonus} reps`, note: 'Sweep arms from hips overhead off the floor, squeezing mid-traps' },
+            { id: 'd2_e4', name: 'Self-Resisted / Towel Biceps Curls', sets: 3, reps: `${12 + repBonus} reps`, note: 'Hook towel under one thigh and curl up while leg provides smooth resistance' },
+            { id: 'd2_e5', name: 'Superman Hold', sets: 3, reps: `${20 + (p - 1) * 5} sec`, note: 'Lift chest and thighs simultaneously; breathe steadily at top' },
+            { id: 'd2_e6', name: 'Reverse Plank', sets: 3, reps: `${20 + (p - 1) * 5} sec`, note: 'Hands under shoulders, drive heels down, lift hips into straight line' }
+          ]
+        },
+        {
+          day: 3,
+          shortTitle: 'Wed • Legs A',
+          title: 'Wednesday – Legs A + Core',
+          subtitle: 'Unilateral quad & glute mass + lower abdominal stability',
+          focus: backpackCue,
+          exercises: [
+            { id: 'd3_e1', name: 'Bulgarian Split Squats', sets: 3 + extraSet, reps: `${10 + repBonus}/leg`, note: 'Rear foot elevated on chair/bed; drop back knee deep and drive through front heel' },
+            { id: 'd3_e2', name: 'Tempo Bodyweight Squats', sets: 3, reps: `${15 + repBonus} reps`, note: '3 seconds down, 1-second pause in the hole, explosive stand' },
+            { id: 'd3_e3', name: 'Reverse Lunges', sets: 3, reps: `${10 + repBonus}/leg`, note: 'Step backward smoothly keeping front shin vertical' },
+            { id: 'd3_e4', name: 'Single-Leg Glute Bridges', sets: 3, reps: `${12 + repBonus}/leg`, note: 'Drive through planted heel and hold peak glute squeeze for 2s' },
+            { id: 'd3_e5', name: 'Single-Leg Calf Raises', sets: 3, reps: `${18 + repBonus}/leg`, note: 'Stand on step or thick book edge for full bottom stretch and top peak' },
+            { id: 'd3_e6', name: 'Lying Leg Raises + Crunches', sets: 3, reps: `${12 + repBonus} + 15`, note: 'Perform leg raises immediately followed by controlled crunches' }
+          ]
+        },
+        {
+          day: 4,
+          shortTitle: 'Thu • Push B',
+          title: 'Thursday – Push B (Upper Chest & Shoulders)',
+          subtitle: 'Incline-angle pressing & shoulder stability',
+          focus: backpackCue,
+          exercises: [
+            { id: 'd4_e1', name: 'Decline Push-ups (Feet Elevated)', sets: 3 + extraSet, reps: `${8 + repBonus} reps`, note: 'Feet on chair or bed to shift load onto upper chest & front delts' },
+            { id: 'd4_e2', name: 'Elevated Pike Push-ups', sets: 3, reps: `${8 + repBonus} reps`, note: 'Knees or toes on bed/chair for vertical overhead press simulation' },
+            { id: 'd4_e3', name: 'Standard Push-ups', sets: 3, reps: `${10 + repBonus} reps`, note: 'Clean full-range reps stopping 1–2 reps shy of failure' },
+            { id: 'd4_e4', name: 'Close-Grip Push-ups', sets: 2 + extraSet, reps: `${10 + repBonus} reps`, note: 'Hands directly under shoulders, elbows brushing ribs' },
+            { id: 'd4_e5', name: 'Plank Shoulder Taps', sets: 3, reps: `${20 + repBonus * 2} taps`, note: 'Feet wide; tap opposite shoulder slowly without hip sway' },
+            { id: 'd4_e6', name: 'Side Plank', sets: 2, reps: `${30 + (p - 1) * 10}s/side`, note: 'Stack feet and keep hips lifted high for oblique stability' }
+          ]
+        },
+        {
+          day: 5,
+          shortTitle: 'Fri • Pull B',
+          title: 'Friday – Pull B (Lats, Mid-Back & Biceps)',
+          subtitle: 'Underhand pulling & posterior chain endurance',
+          focus: backpackCue,
+          exercises: [
+            { id: 'd5_e1', name: 'Underhand Inverted Table / Towel Rows', sets: 3 + extraSet, reps: `${10 + repBonus} reps`, note: 'Supinated grip recruits lower lats and biceps heavily' },
+            { id: 'd5_e2', name: 'Prone W Raises', sets: 3, reps: `${12 + repBonus} reps`, note: 'Pull elbows down toward ribs forming a W while lifting chest' },
+            { id: 'd5_e3', name: 'Reverse Snow Angels', sets: 3, reps: `${12 + repBonus} reps`, note: 'Slow 3-second sweep overhead and back to hips' },
+            { id: 'd5_e4', name: 'Superman Raises (Dynamic)', sets: 3, reps: `${12 + repBonus} reps`, note: 'Lift for 2 seconds, lower with control without resting on floor' },
+            { id: 'd5_e5', name: 'Self-Resisted / Towel Biceps Curls', sets: 3, reps: `${12 + repBonus} reps`, note: 'Focus on a slow 3-second eccentric lowering phase' },
+            { id: 'd5_e6', name: 'Reverse Plank', sets: 3, reps: `${25 + (p - 1) * 5} sec`, note: 'Open chest, depress shoulders away from ears, lock glutes' }
+          ]
+        },
+        {
+          day: 6,
+          shortTitle: 'Sat • Legs B',
+          title: 'Saturday – Legs B + Core',
+          subtitle: 'Hamstring curling strength, glute thrust & core endurance',
+          focus: backpackCue,
+          exercises: [
+            { id: 'd6_e1', name: 'Paused Split Squats', sets: 3 + extraSet, reps: `${10 + repBonus}/leg`, note: 'Hold 2 full seconds 1 inch above the floor on every rep' },
+            { id: 'd6_e2', name: 'Sliding Floor Hamstring Curls', sets: 3, reps: `${10 + repBonus} reps`, note: 'Lie on back with socks/towel on smooth floor; bridge hips and curl heels in' },
+            { id: 'd6_e3', name: 'High-Rep Bodyweight Squats', sets: 3, reps: `${20 + repBonus} reps`, note: 'Continuous piston-like tempo to drive metabolic leg pump' },
+            { id: 'd6_e4', name: 'Elevated Hip Thrusts', sets: 3, reps: `${15 + repBonus} reps`, note: 'Upper back on bed/couch; drive hips up and pause 2s at top' },
+            { id: 'd6_e5', name: 'Standing Calf Raises', sets: 3, reps: `${20 + repBonus} reps`, note: 'Pause 1 second at peak tiptoe contraction' },
+            { id: 'd6_e6', name: 'Bicycle Crunches + 40s Plank', sets: 3, reps: `${16 + repBonus} + 40s`, note: 'Controlled elbow-to-knee rotation straight into a 40s forearm plank' }
+          ]
+        },
+        {
+          day: 7,
+          shortTitle: 'Sun • Recovery',
+          title: 'Sunday – Active Recovery & Mobility',
+          subtitle: 'Nervous system recovery & joint decompression for growth',
+          focus: 'Muscles grow during rest—keep protein & calorie surplus identical to training days.',
+          exercises: [
+            { id: 'd7_e1', name: 'Brisk Outdoor Walk', sets: 1, reps: '25–30 min', note: 'Low-impact circulation to clear soreness and boost appetite' },
+            { id: 'd7_e2', name: 'Thoracic & Hip Mobility Flow', sets: 2, reps: '8 min/round', note: 'World’s greatest stretch, cat-cow, deep squat hold & shoulder dislocates' },
+            { id: 'd7_e3', name: 'Diaphragmatic Box Breathing', sets: 2, reps: '3 min/round', note: '4s inhale, 4s hold, 6s exhale to shift body into parasympathetic recovery' }
+          ]
+        }
+      ];
+    }
+
+    function buildScaledGroceries(m) {
+      const s = m.portionScale;
+      return [
+        { id: 'g_eggs', category: 'Protein & Dairy', name: 'Whole Eggs (Non-Veg Plan)', qty: `${scaleAmount(24, s, 2)} eggs` },
+        { id: 'g_chicken', category: 'Protein & Dairy', name: 'Chicken Breast / Fish (or Paneer/Tofu)', qty: `${(1.7 * s).toFixed(1)} kg` },
+        { id: 'g_milk', category: 'Protein & Dairy', name: 'Whole Milk (or Unsweetened Soy Milk)', qty: `${(3.5 * s).toFixed(1)} liters` },
+        { id: 'g_curd', category: 'Protein & Dairy', name: 'Curd / Greek Yogurt', qty: `${(1.2 * s).toFixed(1)} kg` },
+        { id: 'g_soya', category: 'Protein & Dairy', name: 'Soya Chunks (High-Protein Swap)', qty: `${scaleAmount(250, s, 50)} g` },
+
+        { id: 'g_oats', category: 'Grains & Legumes', name: 'Rolled Oats', qty: `${scaleAmount(450, s, 50)} g` },
+        { id: 'g_rice', category: 'Grains & Legumes', name: 'Rice (White or Brown)', qty: `${(1.8 * s).toFixed(1)} kg` },
+        { id: 'g_atta', category: 'Grains & Legumes', name: 'Whole Wheat Flour (Atta)', qty: `${(1.3 * s).toFixed(1)} kg` },
+        { id: 'g_dal', category: 'Grains & Legumes', name: 'Moong / Masoor Dal', qty: `${scaleAmount(650, s, 50)} g` },
+        { id: 'g_chana', category: 'Grains & Legumes', name: 'Roasted Chana (Chickpeas)', qty: `${scaleAmount(550, s, 50)} g` },
+
+        { id: 'g_pb', category: 'Nuts, Seeds & Fats', name: 'Natural Peanut Butter', qty: `${scaleAmount(300, s, 50)} g` },
+        { id: 'g_almonds', category: 'Nuts, Seeds & Fats', name: 'Raw Almonds', qty: `${scaleAmount(120, s, 20)} g` },
+        { id: 'g_walnuts', category: 'Nuts, Seeds & Fats', name: 'Walnut Halves', qty: `${scaleAmount(120, s, 20)} g` },
+        { id: 'g_seeds', category: 'Nuts, Seeds & Fats', name: 'Flax, Chia & Pumpkin Seeds Mix', qty: `${scaleAmount(200, s, 25)} g` },
+        { id: 'g_ghee', category: 'Nuts, Seeds & Fats', name: 'Pure Ghee & Cooking Oil', qty: `${scaleAmount(150, s, 25)} ml` },
+
+        { id: 'g_banana', category: 'Fresh Produce', name: 'Ripe Bananas', qty: `${scaleAmount(21, s, 1)} pcs` },
+        { id: 'g_spinach', category: 'Fresh Produce', name: 'Fresh Spinach (Palak)', qty: `${scaleAmount(4, s, 1)} bunches` },
+        { id: 'g_veg', category: 'Fresh Produce', name: 'Mixed Stir-Fry Vegetables (Beans, Carrots, Peppers)', qty: `${(1.5 * s).toFixed(1)} kg` },
+        { id: 'g_fruit', category: 'Fresh Produce', name: 'Seasonal Fruits (Apples / Oranges / Papaya)', qty: `${(1.2 * s).toFixed(1)} kg` },
+
+        { id: 'g_spices', category: 'Pantry', name: 'Turmeric, Black Pepper, Cumin & Garlic-Ginger', qty: 'Weekly stock' },
+        { id: 'g_dates', category: 'Pantry', name: 'Seedless Dates (Optional Smoothie Sweetener)', qty: `${scaleAmount(150, s, 25)} g` }
+      ];
+    }
+
+    // =========================================================================
+    // 5. WEEKLY BULKING DIET AGGREGATOR & MONITOR COMPONENT
+    // =========================================================================
+    function computeWeeklyDietStats(state, m, scaledMeals) {
+      const weekDays = getCurrentWeekDates();
+      const weeklyCalTarget = m.targetCalories * 7;
+      const weeklyProTarget = m.targetProtein * 7;
+      const weeklyMaintenance = m.maintenanceCalories * 7;
+
+      let weeklyCalories = 0;
+      let weeklyProtein = 0;
+      let adherentDays = 0;
+      let loggedDays = 0;
+
+      const dailyBreakdown = weekDays.map(d => {
+        const dayMap = state.checkedMealsByDate[d.iso] || {};
+        let cals = 0;
+        let pro = 0;
+        let checkedCount = 0;
+
+        scaledMeals.forEach(meal => {
+          if (dayMap[meal.id]) {
+            cals += meal.calories;
+            pro += meal.protein;
+            checkedCount++;
+          }
+        });
+
+        const calPct = m.targetCalories > 0 ? Math.round((cals / m.targetCalories) * 100) : 0;
+        const isAdherent = calPct >= 85;
+        if (isAdherent) adherentDays++;
+        if (cals > 0) loggedDays++;
+
+        weeklyCalories += cals;
+        weeklyProtein += pro;
+
+        return {
+          ...d,
+          calories: cals,
+          protein: pro,
+          checkedCount,
+          calPct,
+          isAdherent
+        };
+      });
+
+      const weeklyCalPct = Math.min(100, Math.round((weeklyCalories / Math.max(1, weeklyCalTarget)) * 100));
+      const weeklyProPct = Math.min(100, Math.round((weeklyProtein / Math.max(1, weeklyProTarget)) * 100));
+      const adherencePct = Math.round((adherentDays / 7) * 100);
+      const netSurplus = weeklyCalories - (loggedDays * m.maintenanceCalories);
+
+      return {
+        weekDays: dailyBreakdown,
+        weeklyCalories,
+        weeklyCalTarget,
+        weeklyCalPct,
+        weeklyProtein,
+        weeklyProTarget,
+        weeklyProPct,
+        adherentDays,
+        adherencePct,
+        loggedDays,
+        netSurplus,
+        weeklyMaintenance
+      };
+    }
+
+    function WeeklyDietMonitorCard({ m, weeklyStats, selectedDateISO, onSelectDay, showJumpLink, onJumpToDiet }) {
+      const maxBarCals = Math.max(m.targetCalories * 1.15, ...weeklyStats.weekDays.map(d => d.calories));
+      const targetLinePct = Math.min(92, Math.round((m.targetCalories / maxBarCals) * 100));
+
+      return (
+        <section className="bg-slate-900/95 dark:bg-slate-900/95 border border-slate-800 rounded-3xl p-4 space-y-3.5 shadow-lg">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">
+                  Overall Weekly Bulking Diet Monitor
+                </span>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[9px] font-extrabold">
+                  {weeklyStats.adherentDays}/7 Days ≥85%
+                </span>
+              </div>
+              <h3 className="text-sm font-extrabold text-white mt-0.5">
+                Mon {weeklyStats.weekDays[0].compactDate} – Sun {weeklyStats.weekDays[6].compactDate}
+              </h3>
+            </div>
+
+            <div className="text-right flex-shrink-0">
+              <div className="text-xs font-extrabold text-amber-300">{weeklyStats.adherencePct}% Adherence</div>
+              <div className="text-[10px] text-slate-400">
+                {weeklyStats.netSurplus >= 0 ? `+${weeklyStats.netSurplus.toLocaleString()}` : weeklyStats.netSurplus.toLocaleString()} kcal net surplus
+              </div>
+            </div>
+          </div>
+
+          {/* Weekly Cumulative Calories & Protein Cards */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="bg-slate-950/90 border border-slate-800/80 rounded-2xl p-2.5 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] font-bold">
+                <span className="text-slate-400">Weekly Calories</span>
+                <span className="text-emerald-400">{weeklyStats.weeklyCalPct}%</span>
+              </div>
+              <div className="text-xs font-extrabold text-white">
+                {weeklyStats.weeklyCalories.toLocaleString()}{' '}
+                <span className="text-[10px] font-medium text-slate-400">/ {weeklyStats.weeklyCalTarget.toLocaleString()}</span>
+              </div>
+              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-300"
+                  style={{ width: `${weeklyStats.weeklyCalPct}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="bg-slate-950/90 border border-slate-800/80 rounded-2xl p-2.5 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] font-bold">
+                <span className="text-slate-400">Weekly Protein</span>
+                <span className="text-sky-400">{weeklyStats.weeklyProPct}%</span>
+              </div>
+              <div className="text-xs font-extrabold text-white">
+                {weeklyStats.weeklyProtein.toLocaleString()}g{' '}
+                <span className="text-[10px] font-medium text-slate-400">/ {weeklyStats.weeklyProTarget.toLocaleString()}g</span>
+              </div>
+              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-sky-400 rounded-full transition-all duration-300"
+                  style={{ width: `${weeklyStats.weeklyProPct}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive 7-Day Calorie & Protein Bar Chart (Mon - Sun) */}
+          <div className="bg-slate-950/90 border border-slate-800/80 rounded-2xl p-3">
+            <div className="flex items-center justify-between text-[10px] text-slate-400 mb-2">
+              <span>Tap any bar to view/log day</span>
+              <span className="text-amber-300 font-semibold">--- Target ({m.targetCalories.toLocaleString()} kcal)</span>
+            </div>
+
+            <div className="relative h-28 flex items-end justify-between gap-1.5 pt-4 pb-1 px-1">
+              <div
+                className="absolute left-0 right-0 border-t border-dashed border-amber-400/70 pointer-events-none z-10"
+                style={{ bottom: `${targetLinePct}%` }}
+              />
+
+              {weeklyStats.weekDays.map(d => {
+                const heightPct = d.calories > 0 ? Math.max(8, Math.min(100, Math.round((d.calories / maxBarCals) * 100))) : 4;
+                const isSelected = d.iso === selectedDateISO;
+                let barColor = 'bg-slate-800';
+                if (d.calPct >= 90) barColor = 'bg-emerald-500';
+                else if (d.calPct >= 50) barColor = 'bg-amber-400';
+                else if (d.calories > 0) barColor = 'bg-sky-500/80';
+
+                return (
+                  <button
+                    key={d.iso}
+                    type="button"
+                    onClick={() => onSelectDay(d.iso)}
+                    className="flex-1 h-full flex flex-col items-center justify-end focus:outline-none"
+                    title={`${d.label} (${d.compactDate}): ${d.calories} kcal • ${d.protein}g P`}
+                  >
+                    <span className={`text-[9px] font-bold mb-1 ${isSelected ? 'text-white' : 'text-slate-400'}`}>
+                      {d.calories > 0 ? `${(d.calories / 1000).toFixed(1)}k` : '0'}
+                    </span>
+                    <div
+                      className={`w-full max-w-[28px] h-20 bg-slate-900 rounded-t-lg flex items-end overflow-hidden p-0.5 ${
+                        isSelected ? 'ring-2 ring-emerald-400' : ''
+                      }`}
+                    >
+                      <div className={`w-full rounded-t-md transition-all duration-300 ${barColor}`} style={{ height: `${heightPct}%` }} />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-7 gap-1.5 mt-1.5 pt-1.5 border-t border-slate-800/80 text-center">
+              {weeklyStats.weekDays.map(d => {
+                const isSelected = d.iso === selectedDateISO;
+                return (
+                  <button
+                    key={d.iso}
+                    type="button"
+                    onClick={() => onSelectDay(d.iso)}
+                    className={`py-1 rounded-lg transition ${
+                      isSelected ? 'bg-emerald-500/15 text-emerald-300' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className={`text-[10px] font-extrabold ${d.isToday ? 'underline decoration-emerald-400' : ''}`}>
+                      {d.label}
+                    </div>
+                    <div className="text-[9px] font-semibold text-slate-400">{d.protein}g P</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Color Legend */}
+          <div className="flex items-center justify-between text-[10px] text-slate-400 px-1 flex-wrap gap-1">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> ≥90% Target</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" /> 50–89%</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-700" /> &lt;50%</span>
+            {showJumpLink && (
+              <button type="button" onClick={onJumpToDiet} className="text-emerald-400 font-bold underline">
+                Log Meals →
+              </button>
+            )}
+          </div>
+        </section>
+      );
+    }
+
+    // =========================================================================
+    // 6. MAIN APPLICATION COMPONENT
+    // =========================================================================
+    function SmartBulkApp() {
+      const [state, setState] = useState(loadInitialState);
+      const [toastMsg, setToastMsg] = useState('');
+      const [weightModalOpen, setWeightModalOpen] = useState(false);
+      const [weightInput, setWeightInput] = useState('');
+      const [weightDateInput, setWeightDateInput] = useState(getTodayISO());
+      const [weightNoteInput, setWeightNoteInput] = useState('');
+
+      // Confirm Modal state
+      const [confirmDialog, setConfirmDialog] = useState(null);
+
+      // Rest Timer state (60s / 90s / 120s)
+      const [timerPreset, setTimerPreset] = useState(90);
+      const [timerRemaining, setTimerRemaining] = useState(90);
+      const [timerRunning, setTimerRunning] = useState(false);
+
+      // Grocery search & custom add inputs
+      const [groceryQuery, setGroceryQuery] = useState('');
+      const [customGroceryName, setCustomGroceryName] = useState('');
+      const [customGroceryQty, setCustomGroceryQty] = useState('');
+      const [customGroceryCat, setCustomGroceryCat] = useState('Protein & Dairy');
+
+      // Timeline Setup controlled form inputs
+      const [formStartDate, setFormStartDate] = useState(state.timeline.startDate);
+      const [formEndDate, setFormEndDate] = useState(state.timeline.endDate);
+      const [formStartWeight, setFormStartWeight] = useState(String(state.timeline.startWeight));
+      const [formTargetGain, setFormTargetGain] = useState(String(state.timeline.targetGain));
+      const [formWorkoutTime, setFormWorkoutTime] = useState(state.timeline.workoutTime);
+
+      const toastTimerRef = useRef(null);
+
+      const showToast = (msg) => {
+        setToastMsg(msg);
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = setTimeout(() => setToastMsg(''), 2600);
+      };
+
+      // Sync state to localStorage ('smartbulk_v3_state')
+      useEffect(() => {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (e) {
+          console.warn('localStorage write skipped:', e);
+        }
+      }, [state]);
+
+      // Apply theme class
+      useEffect(() => {
+        const rootEl = document.documentElement;
+        if (state.theme === 'light') {
+          rootEl.classList.remove('dark');
+        } else {
+          rootEl.classList.add('dark');
+        }
+      }, [state.theme]);
+
+      // Rest Timer countdown + Web Audio API beep
+      useEffect(() => {
+        if (!timerRunning) return;
+        const interval = setInterval(() => {
+          setTimerRemaining(prev => {
+            if (prev <= 1) {
+              setTimerRunning(false);
+              playBeepAlert();
+              showToast('Rest complete! Start your next set 💪');
+              return timerPreset;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+        return () => clearInterval(interval);
+      }, [timerRunning, timerPreset]);
+
+      const playBeepAlert = () => {
+        try {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (!AudioCtx) return;
+          const ctx = new AudioCtx();
+          [0, 0.22].forEach((delay, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(idx === 0 ? 780 : 1040, ctx.currentTime + delay);
+            gain.gain.setValueAtTime(0.18, ctx.currentTime + delay);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.18);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(ctx.currentTime + delay);
+            osc.stop(ctx.currentTime + delay + 0.18);
+          });
+        } catch (e) {}
+      };
+
+      // Derived adaptive metrics
+      const metrics = useMemo(() => computeTimelineMetrics(state), [state]);
+      const scaledMeals = useMemo(() => buildScaledMeals(metrics), [metrics]);
+      const scaledWorkouts = useMemo(() => buildScaledWorkouts(metrics), [metrics]);
+      const scaledGroceries = useMemo(() => buildScaledGroceries(metrics), [metrics]);
+      const weeklyStats = useMemo(
+        () => computeWeeklyDietStats(state, metrics, scaledMeals),
+        [state, metrics, scaledMeals]
+      );
+
+      // Handlers: Diet & Weekly Meal Logging
+      const toggleMealForSelectedDate = (mealId) => {
+        const targetISO = state.selectedDietDate || getTodayISO();
+        setState(prev => {
+          const dayMap = prev.checkedMealsByDate[targetISO] || {};
+          return {
+            ...prev,
+            checkedMealsByDate: {
+              ...prev.checkedMealsByDate,
+              [targetISO]: {
+                ...dayMap,
+                [mealId]: !dayMap[mealId]
+              }
+            }
+          };
+        });
+      };
+
+      const completeAllMealsSelectedDay = () => {
+        const targetISO = state.selectedDietDate || getTodayISO();
+        const allChecked = {};
+        scaledMeals.forEach(m => { allChecked[m.id] = true; });
+        setState(prev => ({
+          ...prev,
+          checkedMealsByDate: {
+            ...prev.checkedMealsByDate,
+            [targetISO]: allChecked
+          }
+        }));
+        showToast(`All 7 meals logged for ${formatCompactDate(targetISO)}!`);
+      };
+
+      const copyPreviousDayMeals = () => {
+        const currentISO = state.selectedDietDate || getTodayISO();
+        const prevISO = addDaysISO(currentISO, -1);
+        const prevMap = state.checkedMealsByDate[prevISO];
+        if (!prevMap || Object.values(prevMap).filter(Boolean).length === 0) {
+          showToast(`No logged meals found on ${formatCompactDate(prevISO)}`);
+          return;
+        }
+        setState(prev => ({
+          ...prev,
+          checkedMealsByDate: {
+            ...prev.checkedMealsByDate,
+            [currentISO]: { ...prevMap }
+          }
+        }));
+        showToast(`Copied meals from ${formatCompactDate(prevISO)} → ${formatCompactDate(currentISO)}`);
+      };
+
+      const resetSelectedDayMeals = () => {
+        const targetISO = state.selectedDietDate || getTodayISO();
+        setConfirmDialog({
+          title: `Reset ${formatCompactDate(targetISO)} Meals?`,
+          desc: `Clear all checked meals for ${formatShortDate(targetISO)}?`,
+          onConfirm: () => {
+            setState(prev => ({
+              ...prev,
+              checkedMealsByDate: {
+                ...prev.checkedMealsByDate,
+                [targetISO]: {}
+              }
+            }));
+            setConfirmDialog(null);
+            showToast(`Cleared meals for ${formatCompactDate(targetISO)}`);
+          }
+        });
+      };
+
+      // Handlers: Weight Check-Ins
+      const openWeightModal = () => {
+        setWeightInput(metrics.currentWeight.toFixed(1));
+        setWeightDateInput(getTodayISO());
+        setWeightNoteInput('');
+        setWeightModalOpen(true);
+      };
+
+      const saveWeightCheckIn = (e) => {
+        e.preventDefault();
+        const val = parseFloat(weightInput);
+        if (isNaN(val) || val < 35 || val > 180) {
+          showToast('Enter a valid body weight (35–180 kg)');
+          return;
+        }
+        const dateVal = weightDateInput || getTodayISO();
+        const noteVal = weightNoteInput.trim() || 'Morning fasted check-in';
+
+        setState(prev => {
+          const filtered = prev.weightLogs.filter(l => l.date !== dateVal);
+          const updated = [
+            ...filtered,
+            { id: `w_${Date.now()}`, date: dateVal, weight: +val.toFixed(1), note: noteVal }
+          ].sort((a, b) => a.date.localeCompare(b.date));
+          return { ...prev, weightLogs: updated };
+        });
+
+        setWeightModalOpen(false);
+        showToast(`Logged ${val.toFixed(1)} kg • Calories & portions updated!`);
+      };
+
+      // Handlers: Timeline Configuration Form
+      const handleTimelineSubmit = (e) => {
+        e.preventDefault();
+        const sWeight = parseFloat(formStartWeight);
+        const tGain = parseFloat(formTargetGain);
+
+        if (!formStartDate || !formEndDate) {
+          showToast('Select both Start Date and End Date');
+          return;
+        }
+        if (parseLocalMidnight(formEndDate) <= parseLocalMidnight(formStartDate) + 6 * MS_PER_DAY) {
+          showToast('End Date must be at least 7 days after Start Date');
+          return;
+        }
+        if (isNaN(sWeight) || sWeight < 35 || sWeight > 160) {
+          showToast('Enter a valid Starting Weight (35–160 kg)');
+          return;
+        }
+        if (isNaN(tGain) || tGain < 2 || tGain > 30) {
+          showToast('Enter a valid Target Gain (+2 to +30 kg)');
+          return;
+        }
+
+        setState(prev => {
+          const updatedLogs = prev.weightLogs.length === 1 && prev.weightLogs[0].id === 'w_start'
+            ? [{ id: 'w_start', date: formStartDate, weight: +sWeight.toFixed(1), note: 'Day 1 Starting Baseline' }]
+            : prev.weightLogs;
+
+          return {
+            ...prev,
+            timeline: {
+              startDate: formStartDate,
+              endDate: formEndDate,
+              startWeight: +sWeight.toFixed(1),
+              targetGain: +tGain.toFixed(1),
+              workoutTime: formWorkoutTime || '06:00'
+            },
+            weightLogs: updatedLogs
+          };
+        });
+        showToast('Timeline updated! Meals, workouts & milestones scaled');
+      };
+
+      const applyPresetWeeks = (weeks) => {
+        const base = formStartDate || getTodayISO();
+        setFormEndDate(addDaysISO(base, weeks * 7));
+      };
+
+      // Handlers: Workouts
+      const toggleWorkoutSet = (exId, setIdx) => {
+        const key = `${exId}_${setIdx}`;
+        setState(prev => ({
+          ...prev,
+          completedSets: {
+            ...prev.completedSets,
+            [key]: !prev.completedSets[key]
+          }
+        }));
+      };
+
+      const toggleWorkoutDayDone = (dayNum) => {
+        const dayPlan = scaledWorkouts.find(d => d.day === dayNum);
+        const key = String(dayNum);
+        const nextVal = !state.completedWorkoutDays[key];
+        setState(prev => {
+          const nextSets = { ...prev.completedSets };
+          if (dayPlan && nextVal) {
+            dayPlan.exercises.forEach(ex => {
+              for (let i = 0; i < ex.sets; i++) {
+                nextSets[`${ex.id}_${i}`] = true;
+              }
+            });
+          }
+          return {
+            ...prev,
+            completedSets: nextSets,
+            completedWorkoutDays: {
+              ...prev.completedWorkoutDays,
+              [key]: nextVal
+            }
+          };
+        });
+        if (nextVal && dayPlan) showToast(`${dayPlan.title} completed! 💪`);
+      };
+
+      // Handlers: Groceries
+      const toggleGroceryItem = (id) => {
+        setState(prev => ({
+          ...prev,
+          checkedGroceries: {
+            ...prev.checkedGroceries,
+            [id]: !prev.checkedGroceries[id]
+          }
+        }));
+      };
+
+      const handleAddCustomGrocery = (e) => {
+        e.preventDefault();
+        const name = customGroceryName.trim();
+        if (!name) {
+          showToast('Enter an item name first');
+          return;
+        }
+        const qty = customGroceryQty.trim() || '1 pack';
+        setState(prev => ({
+          ...prev,
+          customGroceries: [
+            { id: `custom_${Date.now()}`, category: customGroceryCat, name, qty },
+            ...prev.customGroceries
+          ]
+        }));
+        setCustomGroceryName('');
+        setCustomGroceryQty('');
+        showToast(`Added "${name}" to ${customGroceryCat}`);
+      };
+
+      // Selected day meal calculations
+      const selectedDietISO = state.selectedDietDate || getTodayISO();
+      const selectedDayCheckedMap = state.checkedMealsByDate[selectedDietISO] || {};
+      const selectedDayMeta = weeklyStats.weekDays.find(d => d.iso === selectedDietISO) || {
+        label: '',
+        compactDate: formatCompactDate(selectedDietISO)
+      };
+
+      let dayCalories = 0, dayProtein = 0, dayCarbs = 0, dayFats = 0;
+      scaledMeals.forEach(item => {
+        if (selectedDayCheckedMap[item.id]) {
+          dayCalories += item.calories;
+          dayProtein += item.protein;
+          dayCarbs += item.carbs;
+          dayFats += item.fats;
+        }
+      });
+
+      const dayCalPct = Math.min(100, Math.round((dayCalories / Math.max(1, metrics.targetCalories)) * 100));
+      const dayProPct = Math.min(100, Math.round((dayProtein / Math.max(1, metrics.targetProtein)) * 100));
+      const dayCarbPct = Math.min(100, Math.round((dayCarbs / Math.max(1, metrics.targetCarbs)) * 100));
+      const dayFatPct = Math.min(100, Math.round((dayFats / Math.max(1, metrics.targetFats)) * 100));
+      const dayCheckedCount = Object.values(selectedDayCheckedMap).filter(Boolean).length;
+
+      const isLight = state.theme === 'light';
+
+      return (
+        <div className={`w-full max-w-[480px] min-h-screen flex flex-col relative shadow-2xl border-x ${
+          isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-[#070b14] border-slate-800/80 text-slate-100'
+        }`}>
+          {/* STICKY TOP HEADER */}
+          <header className={`sticky top-0 z-30 backdrop-blur-md border-b px-4 pt-3.5 pb-3 ${
+            isLight ? 'bg-white/95 border-slate-200' : 'bg-[#070b14]/95 border-slate-800/80'
+          }`}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/20 flex-shrink-0">
+                    ST
+                  </span>
+                  <h1 className={`text-base font-extrabold tracking-tight truncate ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                    SmartBulk Timeline
+                  </h1>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5 truncate">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
+                  <span>
+                    {formatCompactDate(metrics.startDate)} → {formatCompactDate(metrics.endDate)} • Day {metrics.currentDayNumber} of {metrics.totalDays}
+                  </span>
+                </p>
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setState(prev => ({ ...prev, theme: prev.theme === 'dark' ? 'light' : 'dark' }))}
+                  className={`p-2 rounded-xl border transition ${
+                    isLight ? 'bg-slate-100 border-slate-300 text-slate-700' : 'bg-slate-800/90 border-slate-700 text-slate-300'
+                  }`}
+                  aria-label="Toggle Theme"
+                >
+                  {isLight ? <Icons.Moon className="w-3.5 h-3.5" /> : <Icons.Sun className="w-3.5 h-3.5" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={openWeightModal}
+                  className="px-2.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 transition text-slate-950 font-extrabold text-xs shadow-md shadow-emerald-500/20 flex items-center gap-1"
+                >
+                  <Icons.Plus className="w-3.5 h-3.5" />
+                  <span>{metrics.currentWeight.toFixed(1)} kg</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Dual Progress Bar: Weight Gain % vs Timeline Pace */}
+            <div className="mt-2.5 space-y-1">
+              <div className="flex justify-between text-[10px] font-bold">
+                <span className="text-slate-400">{metrics.startWeight.toFixed(1)} kg</span>
+                <span className={
+                  metrics.paceTone === 'emerald' ? 'text-emerald-400' : metrics.paceTone === 'amber' ? 'text-amber-400' : 'text-sky-400'
+                }>
+                  {metrics.paceStatus} ({metrics.varianceKg >= 0 ? `+${metrics.varianceKg.toFixed(1)}` : metrics.varianceKg.toFixed(1)} kg)
+                </span>
+                <span className={isLight ? 'text-slate-700' : 'text-slate-300'}>Goal: {metrics.targetWeight.toFixed(1)} kg</span>
+              </div>
+              <div className={`w-full h-1.5 rounded-full overflow-hidden ${isLight ? 'bg-slate-200' : 'bg-slate-800'}`}>
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-amber-400 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.max(2, metrics.weightGainPct)}%` }}
+                />
+              </div>
+            </div>
+          </header>
+
+          {/* MAIN SCROLLABLE CONTENT */}
+          <main className="flex-1 overflow-y-auto px-4 pt-4 pb-28 space-y-4">
+            {/* =============================================================== */}
+            {/* TAB 1: TODAY & WEEKLY BULKING DIET                              */}
+            {/* =============================================================== */}
+            {state.activeTab === 'diet' && (
+              <>
+                <WeeklyDietMonitorCard
+                  m={metrics}
+                  weeklyStats={weeklyStats}
+                  selectedDateISO={selectedDietISO}
+                  onSelectDay={(iso) => setState(prev => ({ ...prev, selectedDietDate: iso }))}
+                  showJumpLink={false}
+                />
+
+                {/* Mon–Sun Day Selector Pills & Quick Logging Shortcuts */}
+                <section className="space-y-2">
+                  <div className="flex items-center justify-between px-0.5">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+                      Logging Diet For:{' '}
+                      <span className="text-emerald-400">
+                        {selectedDayMeta.label} {selectedDayMeta.compactDate} {selectedDietISO === getTodayISO() ? '(Today)' : ''}
+                      </span>
+                    </span>
+                    {selectedDietISO !== getTodayISO() && (
+                      <button
+                        type="button"
+                        onClick={() => setState(prev => ({ ...prev, selectedDietDate: getTodayISO() }))}
+                        className="text-[11px] font-bold text-sky-400 underline"
+                      >
+                        Jump to Today
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-1">
+                    {weeklyStats.weekDays.map(d => {
+                      const isSel = d.iso === selectedDietISO;
+                      return (
+                        <button
+                          key={d.iso}
+                          type="button"
+                          onClick={() => setState(prev => ({ ...prev, selectedDietDate: d.iso }))}
+                          className={`py-2 px-1 rounded-2xl border text-center transition active:scale-95 ${
+                            isSel
+                              ? 'bg-emerald-500 border-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
+                              : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="text-[10px] font-extrabold">{d.label}</div>
+                          <div className={`text-[9px] font-semibold mt-0.5 ${isSel ? 'text-slate-900' : 'text-slate-400'}`}>
+                            {d.checkedCount}/7
+                          </div>
+                          <div className={`w-1.5 h-1.5 rounded-full mx-auto mt-1 ${
+                            d.isAdherent
+                              ? (isSel ? 'bg-slate-950' : 'bg-emerald-400')
+                              : d.calories > 0
+                              ? (isSel ? 'bg-slate-800' : 'bg-amber-400')
+                              : (isSel ? 'bg-slate-950/30' : 'bg-slate-700')
+                          }`} />
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={completeAllMealsSelectedDay}
+                      className="py-2 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-300 text-[11px] font-bold transition flex items-center justify-center gap-1.5"
+                    >
+                      <Icons.Check className="w-3.5 h-3.5" />
+                      <span>Complete All 7 Meals</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={copyPreviousDayMeals}
+                      className="py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-[11px] font-bold transition flex items-center justify-center gap-1.5"
+                    >
+                      <Icons.Copy className="w-3.5 h-3.5" />
+                      <span>Copy Previous Day</span>
+                    </button>
+                  </div>
+                </section>
+
+                {/* Selected Day Calorie & Macro Summary Card */}
+                <section className="bg-slate-900/95 border border-slate-800 rounded-3xl p-4 shadow-lg space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                          {selectedDayMeta.label} {selectedDayMeta.compactDate} Target
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[9px] font-extrabold">
+                          {metrics.portionScale.toFixed(2)}× portions
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-1.5 mt-1">
+                        <span className="text-2xl font-extrabold text-white">{dayCalories.toLocaleString()}</span>
+                        <span className="text-xs font-semibold text-slate-400">/ {metrics.targetCalories.toLocaleString()} kcal</span>
+                      </div>
+                      {metrics.behindPaceBoost > 0 && (
+                        <p className="text-[10px] text-amber-300 mt-0.5">
+                          Includes +{metrics.behindPaceBoost} kcal/day catch-up surplus
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="relative w-14 h-14 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-14 h-14 -rotate-90" viewBox="0 0 36 36">
+                        <path
+                          className="text-slate-800"
+                          strokeWidth="3.5"
+                          stroke="currentColor"
+                          fill="none"
+                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                        />
+                        <path
+                          className="text-emerald-400 transition-all duration-500"
+                          strokeDasharray={`${dayCalPct}, 100`}
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          stroke="currentColor"
+                          fill="none"
+                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                        />
+                      </svg>
+                      <span className="absolute text-[11px] font-extrabold text-white">{dayCalPct}%</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-slate-950/90 border border-slate-800/80 rounded-2xl p-2.5">
+                      <div className="flex justify-between text-[11px] font-bold mb-1">
+                        <span className="text-emerald-400">Protein</span>
+                        <span className="text-slate-300">{dayProtein}/{metrics.targetProtein}g</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-400 rounded-full transition-all duration-300" style={{ width: `${dayProPct}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950/90 border border-slate-800/80 rounded-2xl p-2.5">
+                      <div className="flex justify-between text-[11px] font-bold mb-1">
+                        <span className="text-amber-400">Carbs</span>
+                        <span className="text-slate-300">{dayCarbs}/{metrics.targetCarbs}g</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-amber-400 rounded-full transition-all duration-300" style={{ width: `${dayCarbPct}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950/90 border border-slate-800/80 rounded-2xl p-2.5">
+                      <div className="flex justify-between text-[11px] font-bold mb-1">
+                        <span className="text-sky-400">Fats</span>
+                        <span className="text-slate-300">{dayFats}/{metrics.targetFats}g</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-sky-400 rounded-full transition-all duration-300" style={{ width: `${dayFatPct}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Diet Preference Toggle + Day Reset */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="inline-flex p-1 rounded-2xl bg-slate-900 border border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setState(prev => ({ ...prev, dietMode: 'nonveg' }));
+                        showToast('Switched to Eggs & Chicken portions');
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                        state.dietMode === 'nonveg' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Eggs & Chicken
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setState(prev => ({ ...prev, dietMode: 'veg' }));
+                        showToast('Switched to Pure Veg portions');
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                        state.dietMode === 'veg' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Pure Veg
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={resetSelectedDayMeals}
+                    className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-semibold text-slate-400 hover:text-amber-300 transition"
+                  >
+                    Reset Day ({dayCheckedCount}/7)
+                  </button>
+                </div>
+
+                {/* Workout Time Anchor Banner */}
+                <div className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30">
+                  <div className="flex items-center gap-2.5">
+                    <span className="px-2 py-1 rounded-lg bg-emerald-500 text-slate-950 text-[11px] font-extrabold">
+                      {formatOffsetTime(metrics.workoutTime, 0)}
+                    </span>
+                    <div>
+                      <div className="text-xs font-bold text-emerald-300">Daily Training Session</div>
+                      <div className="text-[10px] text-emerald-300/80">{metrics.phaseShort} • Meals timed around workout</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setState(prev => ({ ...prev, activeTab: 'workouts' }))}
+                    className="text-[11px] font-bold text-emerald-300 underline"
+                  >
+                    Start →
+                  </button>
+                </div>
+
+                {/* 7 Scaled Indian Meals List */}
+                <section className="space-y-2.5">
+                  {scaledMeals.map(meal => {
+                    const isDone = !!selectedDayCheckedMap[meal.id];
+                    const desc = state.dietMode === 'veg' ? meal.vegDesc : meal.nonVegDesc;
+                    return (
+                      <div
+                        key={meal.id}
+                        onClick={() => toggleMealForSelectedDate(meal.id)}
+                        className={`cursor-pointer rounded-3xl p-3.5 border transition-all active:scale-[0.99] ${
+                          isDone
+                            ? 'bg-emerald-950/30 border-emerald-500/45'
+                            : 'bg-slate-900/95 border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`mt-0.5 w-6 h-6 rounded-xl flex-shrink-0 flex items-center justify-center border-2 transition ${
+                            isDone ? 'bg-emerald-500 border-emerald-500 text-slate-950' : 'border-slate-600 bg-slate-950'
+                          }`}>
+                            {isDone && <Icons.Check className="w-3.5 h-3.5" />}
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-extrabold text-amber-400">{meal.time}</span>
+                              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                                isDone ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-300'
+                              }`}>
+                                {meal.calories} kcal • {meal.protein}g P
+                              </span>
+                            </div>
+
+                            <h3 className={`text-sm font-bold mt-0.5 ${isDone ? 'line-through text-slate-400' : 'text-white'}`}>
+                              {meal.title}
+                            </h3>
+                            <p className="text-xs text-slate-300 mt-1 leading-relaxed">{desc}</p>
+
+                            <div className="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-slate-800/70">
+                              <span className="text-[10px] text-slate-400 font-medium">
+                                C: <strong className="text-slate-200">{meal.carbs}g</strong> • F: <strong className="text-slate-200">{meal.fats}g</strong>
+                              </span>
+                              <span className="text-[10px] text-emerald-300/90 font-medium">{meal.tag}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </section>
+              </>
+            )}
+
+            {/* =============================================================== */}
+            {/* TAB 2: 7-DAY PROGRESSIVE NO-EQUIPMENT WORKOUTS                  */}
+            {/* =============================================================== */}
+            {state.activeTab === 'workouts' && (() => {
+              const currentDay = scaledWorkouts.find(d => d.day === state.selectedWorkoutDay) || scaledWorkouts[0];
+              const isDayDone = !!state.completedWorkoutDays[String(currentDay.day)];
+              const mins = Math.floor(timerRemaining / 60);
+              const secs = timerRemaining % 60;
+              const formattedTimer = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+              return (
+                <>
+                  {/* Horizontal Day Selector Pills (Mon - Sun) */}
+                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+                    {scaledWorkouts.map(d => {
+                      const sel = d.day === currentDay.day;
+                      const done = !!state.completedWorkoutDays[String(d.day)];
+                      return (
+                        <button
+                          key={d.day}
+                          type="button"
+                          onClick={() => setState(prev => ({ ...prev, selectedWorkoutDay: d.day }))}
+                          className={`flex-shrink-0 px-3.5 py-2 rounded-2xl border text-xs font-bold transition flex items-center gap-1.5 ${
+                            sel
+                              ? 'bg-emerald-500 border-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
+                              : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
+                          }`}
+                        >
+                          <span>{d.shortTitle}</span>
+                          <span className={`w-2 h-2 rounded-full ${
+                            done ? (sel ? 'bg-slate-950' : 'bg-emerald-400') : (sel ? 'bg-slate-950/30' : 'bg-slate-700')
+                          }`} />
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Phase & Progressive Overload Header */}
+                  <section className="bg-slate-900/95 border border-slate-800 rounded-3xl p-4 space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">
+                          Week {metrics.currentWeekNumber} • {metrics.phaseName}
+                        </span>
+                        <h2 className="text-lg font-extrabold text-white mt-0.5">{currentDay.title}</h2>
+                        <p className="text-xs text-slate-400">{currentDay.subtitle}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDialog({
+                          title: 'Reset Weekly Workouts?',
+                          desc: 'Clear all set checkmarks and day completion badges for Mon–Sun?',
+                          onConfirm: () => {
+                            setState(prev => ({ ...prev, completedSets: {}, completedWorkoutDays: {} }));
+                            setConfirmDialog(null);
+                            showToast('Weekly workout progress reset');
+                          }
+                        })}
+                        className="px-2.5 py-1.5 rounded-xl bg-slate-800 text-[10px] font-semibold text-slate-400 hover:text-amber-300"
+                      >
+                        Reset Week
+                      </button>
+                    </div>
+
+                    <div className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-200 font-medium">
+                      <strong>Phase Progression Cue:</strong> {currentDay.focus}
+                    </div>
+                  </section>
+
+                  {/* Exercise Cards with Set Check Buttons (S1..S4) */}
+                  <section className="space-y-3">
+                    {currentDay.exercises.map((ex, idx) => {
+                      let doneSets = 0;
+                      for (let s = 0; s < ex.sets; s++) {
+                        if (state.completedSets[`${ex.id}_${s}`]) doneSets++;
+                      }
+                      const allDone = doneSets === ex.sets;
+
+                      return (
+                        <div
+                          key={ex.id}
+                          className={`rounded-3xl p-4 border transition ${
+                            allDone ? 'bg-emerald-950/25 border-emerald-500/45' : 'bg-slate-900/95 border-slate-800'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[11px] font-extrabold text-slate-500">#{idx + 1}</span>
+                                <h3 className="text-sm font-bold text-white">{ex.name}</h3>
+                              </div>
+                              <p className="text-xs text-slate-400 mt-1 leading-relaxed">{ex.note}</p>
+                            </div>
+                            <span className="flex-shrink-0 px-2.5 py-1 rounded-xl bg-slate-800 text-[11px] font-bold text-emerald-300">
+                              {ex.sets} × {ex.reps}
+                            </span>
+                          </div>
+
+                          <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-semibold text-slate-400">Tap completed sets:</span>
+                            <div className="flex items-center gap-2">
+                              {Array.from({ length: ex.sets }).map((_, sIdx) => {
+                                const checked = !!state.completedSets[`${ex.id}_${sIdx}`];
+                                return (
+                                  <button
+                                    key={sIdx}
+                                    type="button"
+                                    onClick={() => toggleWorkoutSet(ex.id, sIdx)}
+                                    className={`w-9 h-9 rounded-xl font-extrabold text-xs border transition active:scale-90 flex items-center justify-center ${
+                                      checked
+                                        ? 'bg-emerald-500 border-emerald-400 text-slate-950 shadow-sm shadow-emerald-500/30'
+                                        : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-emerald-500/50'
+                                    }`}
+                                  >
+                                    {checked ? '✓' : `S${sIdx + 1}`}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </section>
+
+                  {/* Complete Day CTA */}
+                  <button
+                    type="button"
+                    onClick={() => toggleWorkoutDayDone(currentDay.day)}
+                    className={`w-full py-3.5 rounded-2xl font-extrabold text-sm transition active:scale-[0.99] shadow-lg ${
+                      isDayDone
+                        ? 'bg-slate-800 text-emerald-400 border border-emerald-500/40'
+                        : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-emerald-500/25'
+                    }`}
+                  >
+                    {isDayDone ? `✓ ${currentDay.shortTitle} Completed (Tap to Undo)` : `Complete ${currentDay.shortTitle} Workout`}
+                  </button>
+
+                  {/* Sticky Bottom Rest Timer (60s / 90s / 120s) */}
+                  <section className="sticky bottom-2 z-20 bg-slate-900/95 backdrop-blur-md border border-slate-700/90 rounded-3xl p-3.5 shadow-2xl">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <div>
+                          <div className="text-[9px] font-extrabold uppercase tracking-wider text-amber-400">Rest Timer</div>
+                          <div className="text-2xl font-extrabold tracking-tight text-white font-mono">{formattedTimer}</div>
+                        </div>
+                        <div className="flex gap-1">
+                          {[60, 90, 120].map(sec => (
+                            <button
+                              key={sec}
+                              type="button"
+                              onClick={() => {
+                                setTimerRunning(false);
+                                setTimerPreset(sec);
+                                setTimerRemaining(sec);
+                              }}
+                              className={`px-2 py-1.5 rounded-xl text-[11px] font-bold border transition ${
+                                timerPreset === sec
+                                  ? 'bg-amber-500/20 border-amber-400/60 text-amber-300'
+                                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              {sec}s
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setTimerRunning(r => !r)}
+                          className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-extrabold text-xs transition"
+                        >
+                          {timerRunning ? 'Pause' : 'Start'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTimerRunning(false);
+                            setTimerRemaining(timerPreset);
+                          }}
+                          className="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition"
+                        >
+                          Reset
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+                </>
+              );
+            })()}
+
+            {/* =============================================================== */}
+            {/* TAB 3: AUTO-SCALED WEEKLY GROCERIES                             */}
+            {/* =============================================================== */}
+            {state.activeTab === 'groceries' && (() => {
+              const allItems = [...state.customGroceries, ...scaledGroceries];
+              const totalItems = allItems.length;
+              const purchasedCount = allItems.filter(g => !!state.checkedGroceries[g.id]).length;
+              const pct = totalItems ? Math.round((purchasedCount / totalItems) * 100) : 0;
+              const categories = ['Protein & Dairy', 'Grains & Legumes', 'Nuts, Seeds & Fats', 'Fresh Produce', 'Pantry'];
+              const q = groceryQuery.toLowerCase();
+
+              return (
+                <>
+                  {/* Scaled Shopping Summary & Search */}
+                  <section className="bg-slate-900/95 border border-slate-800 rounded-3xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                          Scaled for {metrics.targetCalories.toLocaleString()} kcal/day ({metrics.portionScale.toFixed(2)}×)
+                        </span>
+                        <h2 className="text-base font-extrabold text-white mt-0.5">
+                          {purchasedCount} of {totalItems} Items Purchased
+                        </h2>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDialog({
+                          title: 'Uncheck All Groceries?',
+                          desc: 'Reset all checked items for your next weekly shopping trip?',
+                          onConfirm: () => {
+                            setState(prev => ({ ...prev, checkedGroceries: {} }));
+                            setConfirmDialog(null);
+                            showToast('Grocery checklist reset');
+                          }
+                        })}
+                        className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-amber-300 transition"
+                      >
+                        Uncheck All
+                      </button>
+                    </div>
+
+                    <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-400 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={groceryQuery}
+                        onChange={(e) => setGroceryQuery(e.target.value)}
+                        placeholder="Search eggs, chicken, oats, rice, paneer..."
+                        className="w-full pl-9 pr-4 py-2.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                      />
+                      <span className="text-slate-500 absolute left-3 top-2.5">
+                        <Icons.Search className="w-4 h-4" />
+                      </span>
+                    </div>
+                  </section>
+
+                  {/* Add Custom Grocery Form */}
+                  <form onSubmit={handleAddCustomGrocery} className="bg-slate-900/80 border border-slate-800 rounded-3xl p-3.5 space-y-2">
+                    <div className="text-[11px] font-bold text-slate-300">+ Add Custom Grocery Item</div>
+                    <div className="grid grid-cols-12 gap-2">
+                      <input
+                        type="text"
+                        value={customGroceryName}
+                        onChange={(e) => setCustomGroceryName(e.target.value)}
+                        placeholder="Item name"
+                        className="col-span-6 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-emerald-500"
+                      />
+                      <input
+                        type="text"
+                        value={customGroceryQty}
+                        onChange={(e) => setCustomGroceryQty(e.target.value)}
+                        placeholder="Qty (1 kg)"
+                        className="col-span-3 px-2.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-emerald-500"
+                      />
+                      <button
+                        type="submit"
+                        className="col-span-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs transition"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    <select
+                      value={customGroceryCat}
+                      onChange={(e) => setCustomGroceryCat(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-300 focus:outline-none"
+                    >
+                      {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </form>
+
+                  {/* Categorized Checklists */}
+                  <section className="space-y-3">
+                    {categories.map(cat => {
+                      const catItems = allItems.filter(g => {
+                        const matchCat = g.category === cat;
+                        const matchQ = !q || g.name.toLowerCase().includes(q) || g.qty.toLowerCase().includes(q);
+                        return matchCat && matchQ;
+                      });
+                      if (catItems.length === 0) return null;
+                      const isCollapsed = !!state.collapsedCategories[cat] && !q;
+                      const catDone = catItems.filter(i => !!state.checkedGroceries[i.id]).length;
+
+                      return (
+                        <div key={cat} className="bg-slate-900/95 border border-slate-800 rounded-3xl overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setState(prev => ({
+                              ...prev,
+                              collapsedCategories: {
+                                ...prev.collapsedCategories,
+                                [cat]: !prev.collapsedCategories[cat]
+                              }
+                            }))}
+                            className="w-full px-4 py-3 flex items-center justify-between text-left bg-slate-900 hover:bg-slate-800/60 transition"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-extrabold text-white">{cat}</span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-emerald-400">
+                                {catDone}/{catItems.length}
+                              </span>
+                            </div>
+                            <Icons.ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
+                          </button>
+
+                          {!isCollapsed && (
+                            <div className="divide-y divide-slate-800/70 border-t border-slate-800/70">
+                              {catItems.map(item => {
+                                const checked = !!state.checkedGroceries[item.id];
+                                return (
+                                  <div
+                                    key={item.id}
+                                    onClick={() => toggleGroceryItem(item.id)}
+                                    className="px-4 py-3 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-800/30 transition"
+                                  >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className={`w-5 h-5 rounded-lg flex-shrink-0 flex items-center justify-center border transition ${
+                                        checked ? 'bg-emerald-500 border-emerald-500 text-slate-950' : 'border-slate-600 bg-slate-950'
+                                      }`}>
+                                        {checked && <Icons.Check className="w-3 h-3" />}
+                                      </div>
+                                      <span className={`text-xs font-medium truncate ${checked ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                                        {item.name}
+                                      </span>
+                                    </div>
+                                    <span className="flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-slate-950 border border-slate-800 text-amber-300">
+                                      {item.qty}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </section>
+                </>
+              );
+            })()}
+
+            {/* =============================================================== */}
+            {/* TAB 4: TIMELINE, DUAL-LINE TRAJECTORY & WEEKLY DIET SUMMARY     */}
+            {/* =============================================================== */}
+            {state.activeTab === 'timeline' && (() => {
+              // Dual-Line SVG Trajectory Chart geometry
+              const chartW = 320;
+              const chartH = 120;
+              const padL = 30;
+              const padR = 12;
+              const padT = 12;
+              const padB = 22;
+              const plotW = chartW - padL - padR;
+              const plotH = chartH - padT - padB;
+
+              const startMs = parseLocalMidnight(metrics.startDate);
+              const endMs = Math.max(startMs + 7 * MS_PER_DAY, parseLocalMidnight(metrics.endDate));
+              const loggedWeights = metrics.sortedLogs.map(l => Number(l.weight));
+              const minY = Math.floor((Math.min(metrics.startWeight, ...loggedWeights) - 1) * 2) / 2;
+              const maxY = Math.ceil((Math.max(metrics.targetWeight, ...loggedWeights) + 1) * 2) / 2;
+              const spanY = Math.max(2, maxY - minY);
+
+              const mapX = (iso) => {
+                const ms = parseLocalMidnight(iso);
+                const r = Math.max(0, Math.min(1, (ms - startMs) / (endMs - startMs)));
+                return padL + r * plotW;
+              };
+              const mapY = (w) => {
+                const r = (w - minY) / spanY;
+                return padT + plotH - r * plotH;
+              };
+
+              const actualPolyline = metrics.sortedLogs
+                .map(l => `${mapX(l.date).toFixed(1)},${mapY(Number(l.weight)).toFixed(1)}`)
+                .join(' ');
+
+              return (
+                <>
+                  {/* Live Start-to-End KPI Overview */}
+                  <section className="bg-slate-900/95 border border-slate-800 rounded-3xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">
+                          Start-to-End Transformation Status
+                        </span>
+                        <h2 className="text-base font-extrabold text-white mt-0.5">
+                          {metrics.timelinePct}% Timeline Elapsed ({metrics.daysRemaining}d left)
+                        </h2>
+                      </div>
+                      <span className={`px-2.5 py-1 rounded-xl text-[11px] font-extrabold ${
+                        metrics.paceTone === 'emerald'
+                          ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                          : metrics.paceTone === 'amber'
+                          ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                          : 'bg-sky-500/15 text-sky-300 border border-sky-500/30'
+                      }`}>
+                        {metrics.paceStatus}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-2.5">
+                        <div className="text-[10px] text-slate-400 font-semibold">Expected Today</div>
+                        <div className="text-sm font-extrabold text-sky-300 mt-0.5">{metrics.expectedWeightToday.toFixed(1)} kg</div>
+                      </div>
+                      <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-2.5">
+                        <div className="text-[10px] text-slate-400 font-semibold">Latest Logged</div>
+                        <div className="text-sm font-extrabold text-white mt-0.5">{metrics.currentWeight.toFixed(1)} kg</div>
+                      </div>
+                      <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-2.5">
+                        <div className="text-[10px] text-slate-400 font-semibold">Target Rate</div>
+                        <div className="text-sm font-extrabold text-emerald-400 mt-0.5">+{metrics.weeklyRateKg.toFixed(2)} kg/wk</div>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Weekly Bulking Diet Summary Card */}
+                  <WeeklyDietMonitorCard
+                    m={metrics}
+                    weeklyStats={weeklyStats}
+                    selectedDateISO={selectedDietISO}
+                    onSelectDay={(iso) => setState(prev => ({ ...prev, selectedDietDate: iso, activeTab: 'diet' }))}
+                    showJumpLink={true}
+                    onJumpToDiet={() => setState(prev => ({ ...prev, activeTab: 'diet' }))}
+                  />
+
+                  {/* Dual-Line SVG Trajectory Chart */}
+                  <section className="bg-slate-900/95 border border-slate-800 rounded-3xl p-4 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-extrabold text-white">Start-to-End Weight Trajectory</h3>
+                        <p className="text-[11px] text-slate-400">Dashed Ideal Pace vs. Solid Logged Weight</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={openWeightModal}
+                        className="px-2.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold"
+                      >
+                        + Log Weight
+                      </button>
+                    </div>
+
+                    <div className="bg-slate-950 border border-slate-800/90 rounded-2xl p-2.5">
+                      <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full h-36 overflow-visible">
+                        {[minY, (minY + maxY) / 2, maxY].map((val, i) => {
+                          const y = mapY(val).toFixed(1);
+                          return (
+                            <g key={i}>
+                              <line x1={padL} y1={y} x2={chartW - padR} y2={y} stroke="#1e293b" strokeWidth="1" />
+                              <text x={padL - 4} y={Number(y) + 3} textAnchor="end" fill="#64748b" fontSize="8" fontWeight="600">
+                                {val.toFixed(0)}k
+                              </text>
+                            </g>
+                          );
+                        })}
+
+                        {/* Dashed Ideal Trajectory Line */}
+                        <line
+                          x1={mapX(metrics.startDate).toFixed(1)}
+                          y1={mapY(metrics.startWeight).toFixed(1)}
+                          x2={mapX(metrics.endDate).toFixed(1)}
+                          y2={mapY(metrics.targetWeight).toFixed(1)}
+                          stroke="#38bdf8"
+                          strokeWidth="2"
+                          strokeDasharray="4 4"
+                        />
+                        <circle
+                          cx={mapX(metrics.endDate).toFixed(1)}
+                          cy={mapY(metrics.targetWeight).toFixed(1)}
+                          r="3.5"
+                          fill="#38bdf8"
+                        />
+
+                        {/* Solid Logged Weight Line */}
+                        {metrics.sortedLogs.length >= 2 && (
+                          <polyline
+                            fill="none"
+                            stroke="#10b981"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            points={actualPolyline}
+                          />
+                        )}
+
+                        {metrics.sortedLogs.map(l => (
+                          <circle
+                            key={l.id}
+                            cx={mapX(l.date).toFixed(1)}
+                            cy={mapY(Number(l.weight)).toFixed(1)}
+                            r="4"
+                            fill="#fbbf24"
+                            stroke="#070b14"
+                            strokeWidth="1.5"
+                          />
+                        ))}
+
+                        <text x={padL} y={chartH - 4} textAnchor="start" fill="#94a3b8" fontSize="8" fontWeight="700">
+                          {formatCompactDate(metrics.startDate)}
+                        </text>
+                        <text x={chartW - padR} y={chartH - 4} textAnchor="end" fill="#94a3b8" fontSize="8" fontWeight="700">
+                          {formatCompactDate(metrics.endDate)}
+                        </text>
+                      </svg>
+
+                      <div className="flex items-center justify-center gap-4 mt-1 pt-1.5 border-t border-slate-800/80 text-[10px] font-semibold">
+                        <span className="flex items-center gap-1.5 text-sky-300">
+                          <span className="w-3 border-t-2 border-dashed border-sky-400" /> Ideal ({metrics.startWeight}→{metrics.targetWeight} kg)
+                        </span>
+                        <span className="flex items-center gap-1.5 text-emerald-300">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 border border-emerald-400" /> Logged Weight
+                        </span>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Configurable Start Date -> End Date Goal Setup Form */}
+                  <section className="bg-slate-900/95 border border-slate-800 rounded-3xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">
+                          Adaptive Goal Engine
+                        </span>
+                        <h3 className="text-base font-extrabold text-white mt-0.5">Start-to-End Date Setup</h3>
+                      </div>
+                      <div className="flex gap-1">
+                        {[12, 16, 24].map(wks => (
+                          <button
+                            key={wks}
+                            type="button"
+                            onClick={() => applyPresetWeeks(wks)}
+                            className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-300"
+                          >
+                            {wks}w
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleTimelineSubmit} className="space-y-3">
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-300 mb-1">Start Date</label>
+                          <input
+                            type="date"
+                            value={formStartDate}
+                            onChange={(e) => setFormStartDate(e.target.value)}
+                            required
+                            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-300 mb-1">End Date</label>
+                          <input
+                            type="date"
+                            value={formEndDate}
+                            onChange={(e) => setFormEndDate(e.target.value)}
+                            required
+                            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-300 mb-1">Start (kg)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="35"
+                            max="160"
+                            value={formStartWeight}
+                            onChange={(e) => setFormStartWeight(e.target.value)}
+                            required
+                            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-300 mb-1">Gain (+kg)</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="2"
+                            max="30"
+                            value={formTargetGain}
+                            onChange={(e) => setFormTargetGain(e.target.value)}
+                            required
+                            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-300 mb-1">Workout</label>
+                          <input
+                            type="time"
+                            value={formWorkoutTime}
+                            onChange={(e) => setFormWorkoutTime(e.target.value)}
+                            required
+                            className="w-full px-2.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.99] text-slate-950 font-extrabold text-xs transition shadow-md shadow-emerald-500/20"
+                      >
+                        Update Timeline & Recalculate Plan
+                      </button>
+                    </form>
+                  </section>
+
+                  {/* Weight Check-In History */}
+                  <section className="bg-slate-900/95 border border-slate-800 rounded-3xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-extrabold text-white">Weight Check-In History</h3>
+                      <button type="button" onClick={openWeightModal} className="text-xs font-bold text-emerald-400 hover:underline">
+                        + Add Check-In
+                      </button>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 text-[10px] font-bold uppercase text-slate-400">
+                            <th className="py-2 pr-2">Date</th>
+                            <th className="py-2 px-2">Weight</th>
+                            <th className="py-2 px-2">Gain</th>
+                            <th className="py-2 pl-2 text-right">Pace</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/70 text-xs">
+                          {[...metrics.sortedLogs].reverse().map(log => {
+                            const w = Number(log.weight);
+                            const delta = +(w - metrics.startWeight).toFixed(1);
+                            const logMs = parseLocalMidnight(log.date);
+                            const logElapsed = Math.max(0, Math.min(metrics.totalDays, Math.round((logMs - startMs) / MS_PER_DAY)));
+                            const expAtDate = +(metrics.startWeight + (metrics.targetGain * logElapsed) / metrics.totalDays).toFixed(1);
+                            const varAtDate = +(w - expAtDate).toFixed(1);
+
+                            return (
+                              <tr key={log.id}>
+                                <td className="py-2.5 pr-2 font-medium text-slate-300">
+                                  <div>{formatCompactDate(log.date)}</div>
+                                  <div className="text-[10px] text-slate-500 truncate max-w-[95px]">{log.note || ''}</div>
+                                </td>
+                                <td className="py-2.5 px-2 font-extrabold text-white">{w.toFixed(1)} kg</td>
+                                <td className={`py-2.5 px-2 font-bold ${delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                  {delta >= 0 ? `+${delta.toFixed(1)}` : delta.toFixed(1)} kg
+                                </td>
+                                <td className={`py-2.5 pl-2 text-right font-bold text-[11px] ${
+                                  varAtDate >= 0.2 ? 'text-emerald-400' : varAtDate <= -0.2 ? 'text-amber-400' : 'text-sky-300'
+                                }`}>
+                                  {varAtDate >= 0.2 ? `+${varAtDate.toFixed(1)} kg ahead` : varAtDate <= -0.2 ? `${varAtDate.toFixed(1)} kg behind` : 'On pace'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-800/80 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDialog({
+                          title: 'Reset All App Data?',
+                          desc: 'Restore default 60.0 kg → 72.0 kg timeline starting today and clear all logs?',
+                          onConfirm: () => {
+                            const fresh = createDefaultState();
+                            setState(fresh);
+                            setFormStartDate(fresh.timeline.startDate);
+                            setFormEndDate(fresh.timeline.endDate);
+                            setFormStartWeight(String(fresh.timeline.startWeight));
+                            setFormTargetGain(String(fresh.timeline.targetGain));
+                            setFormWorkoutTime(fresh.timeline.workoutTime);
+                            setConfirmDialog(null);
+                            showToast('App reset to fresh baseline');
+                          }
+                        })}
+                        className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-rose-300 transition"
+                      >
+                        Reset All Data
+                      </button>
+                    </div>
+                  </section>
+                </>
+              );
+            })()}
+          </main>
+
+          {/* TOAST FEEDBACK */}
+          {toastMsg && (
+            <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+              <div className="px-4 py-2 rounded-full bg-slate-900/95 border border-emerald-500/40 text-xs font-semibold text-emerald-300 shadow-xl backdrop-blur-md whitespace-nowrap">
+                {toastMsg}
+              </div>
+            </div>
+          )}
+
+          {/* BOTTOM 4-TAB NAVIGATION */}
+          <nav className={`fixed bottom-0 w-full max-w-[480px] z-30 backdrop-blur-lg border-t px-2 py-2 ${
+            isLight ? 'bg-white/95 border-slate-200' : 'bg-[#0b101d]/95 border-slate-800/90'
+          }`}>
+            <div className="grid grid-cols-4 gap-1">
+              {[
+                { id: 'diet', label: 'Today & Diet', Icon: Icons.Clock },
+                { id: 'workouts', label: 'Workouts', Icon: Icons.Bolt },
+                { id: 'groceries', label: 'Groceries', Icon: Icons.Cart },
+                { id: 'timeline', label: 'Timeline', Icon: Icons.Trend }
+              ].map(({ id, label, Icon }) => {
+                const active = state.activeTab === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setState(prev => ({ ...prev, activeTab: id }))}
+                    className={`flex flex-col items-center justify-center py-1.5 rounded-2xl transition active:scale-95 ${
+                      active
+                        ? 'text-emerald-400 bg-emerald-500/10'
+                        : isLight
+                        ? 'text-slate-500 hover:text-slate-800'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Icon className="w-5 h-5 mb-0.5" />
+                    <span className="text-[11px] font-semibold">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+
+          {/* WEIGHT CHECK-IN MODAL */}
+          {weightModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+              <form
+                onSubmit={saveWeightCheckIn}
+                className="w-full max-w-sm bg-slate-900 border border-slate-700/80 rounded-3xl p-5 shadow-2xl space-y-4"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-base font-extrabold text-white">Log Morning Weight</h3>
+                    <p className="text-xs text-slate-400">Updates trajectory chart & scales daily calories</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setWeightModalOpen(false)}
+                    className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white"
+                  >
+                    <Icons.Close className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Weight (kg)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="35"
+                        max="180"
+                        value={weightInput}
+                        onChange={(e) => setWeightInput(e.target.value)}
+                        required
+                        className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-950 border border-slate-700 text-white text-base font-bold focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Check-In Date</label>
+                      <input
+                        type="date"
+                        value={weightDateInput}
+                        onChange={(e) => setWeightDateInput(e.target.value)}
+                        required
+                        className="w-full px-3 py-2.5 rounded-2xl bg-slate-950 border border-slate-700 text-white text-xs font-bold focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">Note (Optional)</label>
+                    <input
+                      type="text"
+                      value={weightNoteInput}
+                      onChange={(e) => setWeightNoteInput(e.target.value)}
+                      placeholder="e.g. Fasted morning weigh-in"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setWeightModalOpen(false)}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-500 text-slate-950 text-xs font-extrabold hover:bg-emerald-400 shadow-lg shadow-emerald-500/20"
+                  >
+                    Save Check-In
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* CUSTOM CONFIRMATION MODAL */}
+          {confirmDialog && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+              <div className="w-full max-w-sm bg-slate-900 border border-slate-700/80 rounded-3xl p-5 shadow-2xl space-y-4">
+                <h3 className="text-base font-extrabold text-white">{confirmDialog.title}</h3>
+                <p className="text-xs text-slate-300 leading-relaxed">{confirmDialog.desc}</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDialog(null)}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmDialog.onConfirm}
+                    className="flex-1 py-2.5 rounded-xl bg-amber-500 text-slate-950 text-xs font-extrabold hover:bg-amber-400"
+                  >
+                    Confirm
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(
+      <ErrorBoundary>
+        <SmartBulkApp />
+      </ErrorBoundary>
+    );
+  </script>
+</body>
+</html>
